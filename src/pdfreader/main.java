@@ -63,11 +63,97 @@ public class main extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void convert(File file) throws IOException {
+    enum TipoFact {
+        CASE_USA,
+        DESCONOCIDO
+    }
+
+    private String convert2Text(File file) throws IOException {
         PDDocument pdDoc = PDDocument.load(file);
         PDFTextStripper pdfStripper = new PDFLayoutTextStripper();
 
-        System.out.print(pdfStripper.getText(pdDoc));
+        return pdfStripper.getText(pdDoc);
+    }
+
+    private String removeSpaces(String s) {
+        return s.replaceAll("\\s", "");
+    }
+
+    private TipoFact detect(String s) {
+        TipoFact resultado = TipoFact.DESCONOCIDO;
+        String[] text = s.split("\n");
+
+        for (int i = 0; i < 50; i++) {
+            String currText = removeSpaces(text[i]);
+            if (currText.equals("ORDERNUMBERCUSTOMERP.O.ORDERTYPEORDERDATECARRIERMOT")) {
+                resultado = TipoFact.CASE_USA;
+                break;
+            }
+        }
+
+        return resultado;
+    }
+
+    private String extract(TipoFact tipo, String s) {
+        String resultado = "";
+        String[] text = s.split("\n");
+
+        switch (tipo) {
+            case CASE_USA:
+                for (int i = 0; i < 50; i++) {
+                    String currText = removeSpaces(text[i]);
+                    if (currText.equals("ORDERNUMBERCUSTOMERP.O.ORDERTYPEORDERDATECARRIERMOT")) {
+
+                        // TODO obtener pedido
+                        i++;
+
+                        // obtener repuestos
+                        boolean fin = false;
+                        while (!fin) {
+                            i++;
+                            for (int j = 0; j < 30; j++) {
+                                currText = removeSpaces(text[j + i]);
+                                
+                                // fin de pagina ?
+                                if (currText.equals("ThegoodsaresoldwithretentionoftitleofCNHIInternational"
+                                        + "/itsassigneeuntilreceiptoffullpayment.Thisinvoiceistob"
+                                        + "epaidatourHeadOffice.Theaboveinvoiceiscorrectandtrue")) {
+                                    break;
+                                }
+                                
+                                // no hay repuestos ?
+                                if (currText.equals("Subtotals")) {
+                                    fin = true;
+                                    break;
+                                }
+
+                                if (!text[j + i].isBlank()) {
+                                    resultado = resultado + text[j + i] + "\n";
+                                }
+                            }
+
+                            // detectar sig. pagina
+                            if (!fin) {
+                                fin = true;
+                                i++;
+                                for (int j = 0; j < 25; i++) {
+                                    currText = removeSpaces(text[i]);
+                                    if (currText.equals("LINESHIPPINGDOCPARTNUMBERDESCRIPTIONCUSTOMSCountry"
+                                            + "ECCNCASESHIPPINGQUANTITYSDCLISTPRICE%DISCOUNT/UNIT"
+                                            + "PRICEPRNETAMOUNTVAT")) {
+                                        i++;
+                                        fin = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+        }
+
+        return resultado;
     }
 
     private void btnProcesarMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_btnProcesarMouseClicked
@@ -82,9 +168,21 @@ public class main extends javax.swing.JFrame {
         int ret = fc.showOpenDialog(main.this);
         if (ret == JFileChooser.APPROVE_OPTION) {
             try {
-                convert(fc.getSelectedFile());
+                String s = convert2Text(fc.getSelectedFile());
+                TipoFact tipo = detect(s);
+
+                System.out.println(tipo);
+
+                String data = extract(tipo, s);
+
+                try (FileWriter writer = new FileWriter(fc.getSelectedFile().toString().replace(".pdf", ".irp"))) {
+                    writer.write(data);
+                }
+
+                System.out.println(data);
             } catch (IOException ex) {
-                Logger.getLogger(main.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(main.class
+                        .getName()).log(Level.SEVERE, null, ex);
             }
         }
     }//GEN-LAST:event_btnProcesarMouseClicked
